@@ -1,0 +1,11 @@
+# Python dependencies for cryptic_crossword
+
+# Core utilities
+requests>=2.31.0
+
+# Data processing / NLP
+pandas>=2.2.0
+numpy>=1.26.0
+
+# Optional development tooling
+pytest>=8.0.0
