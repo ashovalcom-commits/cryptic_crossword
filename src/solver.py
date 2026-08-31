@@ -5,6 +5,7 @@ import random
 from collections import defaultdict
 from typing import List, Dict
 from grid import Grid, Slot
+from parser import extract_text_from_docx, parse_grid_to_matrix, parse_clues, link_clues_to_grid
 
 class Solver:
     def __init__(self, grid: Grid, wordbank_path: str):
@@ -171,33 +172,73 @@ class Solver:
         plt.tight_layout()
         plt.show()
 
+    def get_slot_by_clue(self, clue_number: str, direction_name: str):
+        """
+        שולף עוגן ספציפי מהלוח לפי מספר ההגדרה והכיוון (ACROSS/DOWN).
+        """
+        for slot in self.grid.slots:
+            if slot.clue_number == str(clue_number) and slot.direction.name == direction_name:
+                return slot
+        return None
+
+    def lock_word(self, clue_number: str, direction_name: str, word: str):
+        """
+        מדמה פעולה של פותר אנושי: נועל מילה ספציפית בעוגן.
+        """
+        slot = self.get_slot_by_clue(clue_number, direction_name)
+        if slot:
+            if len(word) == slot.length:
+                slot.assigned_word = word
+                print(f"ננעל: {word} בהגדרה {clue_number} {direction_name}")
+            else:
+                print(f"שגיאה: המילה '{word}' באורך {len(word)}, אבל העוגן דורש {slot.length} אותיות.")
+        else:
+            print(f"לא נמצא עוגן {clue_number} {direction_name}")
+
+    def suggest_words_for_slot(self, clue_number: str, direction_name: str, max_results: int = 10) -> List[str]:
+        """
+        מחזיר רשימת מילים חוקיות מהמילון עבור עוגן ספציפי, בהתבסס על החיתוכים הקיימים בלוח.
+        """
+        slot = self.get_slot_by_clue(clue_number, direction_name)
+        if not slot:
+            return []
+            
+        # סינון המילים בדומיין של העוגן לפי המצב הנוכחי של הלוח
+        valid_words = [word for word in slot.domain if self._is_valid_assignment(slot, word)]
+        return valid_words[:max_results]
+
+
 
 if __name__ == "__main__":
-    # בלוק בדיקה שמוודא שהחיבור בין הלוח למילון עובד
-    
-    # 1. ניצור את אותו לוח בדיקה מהשלב הקודם
-    test_layout = [
-        "#...#",
-        ".....",
-        ".....",
-        ".....",
-        "#...#"
-    ]
-    my_grid = Grid(test_layout, min_word_length=2)
-    
-    # 2. נגדיר את הנתיב לקובץ הנתונים שיצרנו בתוך תיקיית data
+    # שימוש בקובץ האמיתי מתוך ה-parser
+    file_path = r"C:\Users\ashov\Downloads\28-08-26.docx"
     wordbank = "data/crossword_wordbank_he.txt"
     
-    # 3. ניצור את הפותרן
     try:
+        # 1. טעינה ופענוח הלוח
+        raw_text = extract_text_from_docx(file_path)
+        result_matrix = parse_grid_to_matrix(raw_text)
+        parsed_clues = parse_clues(raw_text)
+        
+        my_grid = Grid(result_matrix, min_word_length=2)
+        link_clues_to_grid(my_grid, parsed_clues)
+        
+        # 2. יצירת הפותרן
         my_solver = Solver(my_grid, wordbank)
         
-        if my_solver.solve():
-            print("\nהתשבץ נפתר בהצלחה! פותח חלון תצוגה...")
-            # קוראים לפונקציית הציור במקום או בנוסף להדפסת הטקסט
-            my_solver.plot_solution()
-        else:
-            print("\nלא נמצא פתרון חוקי ללוח הזה.")
-            
-    except FileNotFoundError as e:
-        print(e)
+        print("\n--- סימולציית פתרון אינטראקטיבי ---")
+        # נניח שפתרת את 9 אופקי: "קצין עם קוף (3)" -> סרן (סרן + ן')
+        my_solver.lock_word("9", "ACROSS", "סרן")
+        
+        # עכשיו נבקש מהמערכת עזרה עם 1 מאונך שחותך את המילה שהזנו
+        clue_1_down = my_solver.get_slot_by_clue("1", "DOWN")
+        print(f"\nמבקש הצעות עבור {clue_1_down.clue_number} מאונך: '{clue_1_down.clue_text}'")
+        
+        suggestions = my_solver.suggest_words_for_slot("1", "DOWN", max_results=5)
+        print(f"הצעות המנוע (מתוך המילון, מתחשב באות 'ס' שנחתכת): {suggestions}")
+        
+        # הצגת הלוח החלקי כדי לראות את המילה ששובצה
+        my_solver.plot_solution()
+        
+    except Exception as e:
+        print(f"שגיאה בהרצה: {e}")
