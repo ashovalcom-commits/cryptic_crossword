@@ -36,3 +36,6 @@ htmlcov/
 build/
 dist/
 *.egg-info/
+
+# Project data
+data/
