@@ -1,3 +1,4 @@
+import argparse
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import os
@@ -195,6 +196,46 @@ class Solver:
         else:
             print(f"לא נמצא עוגן {clue_number} {direction_name}")
 
+    def unlock_word(self, clue_number: str, direction_name: str):
+        """
+        משחרר מילה שנועלה בעוגן ומחזיר אותו למצב פנוי.
+        """
+        slot = self.get_slot_by_clue(clue_number, direction_name)
+        if slot:
+            if slot.assigned_word:
+                old_word = slot.assigned_word
+                slot.assigned_word = None
+                print(f"שוחרר: '{old_word}' מהגדרה {clue_number} {direction_name}")
+            else:
+                print(f"העוגן {clue_number} {direction_name} כבר פנוי.")
+        else:
+            print(f"לא נמצא עוגן {clue_number} {direction_name}")
+
+    def solve_slot(self, clue_number: str, direction_name: str) -> bool:
+        """
+        מנסה למצוא מילה חוקית לעוגן ספציפי בהתחשב במצב הנוכחי של הלוח.
+        מחזיר True אם נמצאה מילה, False אחרת.
+        """
+        slot = self.get_slot_by_clue(clue_number, direction_name)
+        if not slot:
+            print(f"לא נמצא עוגן {clue_number} {direction_name}")
+            return False
+
+        if slot.assigned_word:
+            print(f"העוגן {clue_number} {direction_name} כבר מכיל: '{slot.assigned_word}'")
+            return True
+
+        valid_words = [w for w in slot.domain if self._is_valid_assignment(slot, w)]
+        if not valid_words:
+            print(f"לא נמצאו מילים חוקיות עבור {clue_number} {direction_name} במצב הנוכחי של הלוח.")
+            return False
+
+        # שיבוץ המילה הראשונה שעוברת את כל האילוצים
+        slot.assigned_word = valid_words[0]
+        dir_he = "אופקי" if direction_name == "ACROSS" else "אנכי"
+        print(f"שובץ: '{valid_words[0]}' בהגדרה {clue_number} {dir_he} (מתוך {len(valid_words)} אפשרויות)")
+        return True
+
     def suggest_words_for_slot(self, clue_number: str, direction_name: str, max_results: int = 10) -> List[str]:
         """
         מחזיר רשימת מילים חוקיות מהמילון עבור עוגן ספציפי, בהתבסס על החיתוכים הקיימים בלוח.
@@ -207,38 +248,199 @@ class Solver:
         valid_words = [word for word in slot.domain if self._is_valid_assignment(slot, word)]
         return valid_words[:max_results]
 
+    def print_board(self):
+        """
+        מציג את מצב הלוח הנוכחי בטקסט - כולל אותיות שכבר שובצו.
+        """
+        board = [['█' if cell == '#' else '.' for cell in row] for row in self.grid.layout]
+        for slot in self.grid.slots:
+            if slot.assigned_word:
+                for i, char in enumerate(slot.assigned_word):
+                    if slot.direction.name == "ACROSS":
+                        board[slot.row][slot.col + i] = char
+                    else:
+                        board[slot.row + i][slot.col] = char
+
+        filled = sum(1 for slot in self.grid.slots if slot.assigned_word)
+        total = len(self.grid.slots)
+        print(f"\n--- מצב הלוח ({filled}/{total} הגדרות פתורות) ---")
+        for row in board:
+            print(' '.join(row))
+        print()
+
+    def list_clues(self):
+        """
+        מציג את כל ההגדרות בלוח עם הסטטוס שלהן (פתור / פנוי).
+        """
+        print("\n--- אופקי ---")
+        across = sorted(
+            [s for s in self.grid.slots if s.direction.name == "ACROSS" and s.clue_number],
+            key=lambda s: int(s.clue_number)
+        )
+        for slot in across:
+            status = f"✓ {slot.assigned_word}" if slot.assigned_word else f"_ ({slot.length} אותיות)"
+            clue = slot.clue_text if slot.clue_text else "(ללא הגדרה)"
+            print(f"  {slot.clue_number}. {clue}  [{status}]")
+
+        print("\n--- אנכי ---")
+        down = sorted(
+            [s for s in self.grid.slots if s.direction.name == "DOWN" and s.clue_number],
+            key=lambda s: int(s.clue_number)
+        )
+        for slot in down:
+            status = f"✓ {slot.assigned_word}" if slot.assigned_word else f"_ ({slot.length} אותיות)"
+            clue = slot.clue_text if slot.clue_text else "(ללא הגדרה)"
+            print(f"  {slot.clue_number}. {clue}  [{status}]")
+        print()
+
+    def _parse_direction_input(self, dir_str: str) -> str:
+        """
+        ממיר קלט כיוון בעברית או באנגלית לערך פנימי.
+        """
+        dir_str = dir_str.strip().lower()
+        if dir_str in ('אופקי', 'across', 'a', 'א'):
+            return "ACROSS"
+        elif dir_str in ('אנכי', 'down', 'd', 'מ'):
+            return "DOWN"
+        return ""
+
+    def run_interactive(self):
+        """
+        לולאה אינטראקטיבית שמאפשרת למשתמש לעבוד עם התשבץ צעד אחר צעד.
+        """
+        print("\n" + "=" * 50)
+        print("  פותר תשבצים אינטראקטיבי")
+        print("=" * 50)
+        self.print_board()
+
+        help_text = """
+פקודות זמינות:
+  הגדרות / ה       - הצגת כל ההגדרות והסטטוס שלהן
+  לוח / ל          - הצגת מצב הלוח
+  נעל / נ          - נעילת מילה (שאתה כבר פתרת)
+  שחרר / ש         - שחרור מילה שנעלת
+  הצע / צ          - הצעת מילים אפשריות להגדרה
+  פתור / פ         - המנוע ינסה לפתור הגדרה ספציפית
+  ציור             - הצגת הלוח הגרפי (Matplotlib)
+  עזרה / ?         - הצגת תפריט זה
+  יציאה / י        - יציאה מהתוכנית
+"""
+        print(help_text)
+
+        while True:
+            try:
+                user_input = input(">> ").strip()
+            except (EOFError, KeyboardInterrupt):
+                print("\nלהתראות!")
+                break
+
+            if not user_input:
+                continue
+
+            cmd = user_input.split()[0]
+
+            if cmd in ('יציאה', 'י', 'exit', 'q'):
+                print("להתראות!")
+                break
+
+            elif cmd in ('עזרה', '?', 'help'):
+                print(help_text)
+
+            elif cmd in ('לוח', 'ל', 'board'):
+                self.print_board()
+
+            elif cmd in ('הגדרות', 'ה', 'clues'):
+                self.list_clues()
+
+            elif cmd in ('ציור', 'plot'):
+                self.plot_solution()
+
+            elif cmd in ('נעל', 'נ', 'lock'):
+                try:
+                    num = input("  מספר הגדרה: ").strip()
+                    direction = input("  כיוון (אופקי/אנכי): ").strip()
+                    word = input("  מילה: ").strip()
+                    dir_name = self._parse_direction_input(direction)
+                    if not dir_name:
+                        print("  כיוון לא תקין. השתמש ב-'אופקי' או 'אנכי'.")
+                        continue
+                    self.lock_word(num, dir_name, word)
+                except (EOFError, KeyboardInterrupt):
+                    print()
+                    continue
+
+            elif cmd in ('שחרר', 'ש', 'unlock'):
+                try:
+                    num = input("  מספר הגדרה: ").strip()
+                    direction = input("  כיוון (אופקי/אנכי): ").strip()
+                    dir_name = self._parse_direction_input(direction)
+                    if not dir_name:
+                        print("  כיוון לא תקין. השתמש ב-'אופקי' או 'אנכי'.")
+                        continue
+                    self.unlock_word(num, dir_name)
+                except (EOFError, KeyboardInterrupt):
+                    print()
+                    continue
+
+            elif cmd in ('הצע', 'צ', 'suggest'):
+                try:
+                    num = input("  מספר הגדרה: ").strip()
+                    direction = input("  כיוון (אופקי/אנכי): ").strip()
+                    dir_name = self._parse_direction_input(direction)
+                    if not dir_name:
+                        print("  כיוון לא תקין. השתמש ב-'אופקי' או 'אנכי'.")
+                        continue
+                    suggestions = self.suggest_words_for_slot(num, dir_name, max_results=15)
+                    if suggestions:
+                        slot = self.get_slot_by_clue(num, dir_name)
+                        dir_he = "אופקי" if dir_name == "ACROSS" else "אנכי"
+                        print(f"  הצעות עבור {num} {dir_he} ({slot.length} אותיות):")
+                        for i, w in enumerate(suggestions, 1):
+                            print(f"    {i}. {w}")
+                    else:
+                        print("  לא נמצאו מילים מתאימות במצב הנוכחי.")
+                except (EOFError, KeyboardInterrupt):
+                    print()
+                    continue
+
+            elif cmd in ('פתור', 'פ', 'solve'):
+                try:
+                    num = input("  מספר הגדרה: ").strip()
+                    direction = input("  כיוון (אופקי/אנכי): ").strip()
+                    dir_name = self._parse_direction_input(direction)
+                    if not dir_name:
+                        print("  כיוון לא תקין. השתמש ב-'אופקי' או 'אנכי'.")
+                        continue
+                    self.solve_slot(num, dir_name)
+                except (EOFError, KeyboardInterrupt):
+                    print()
+                    continue
+
+            else:
+                print("  פקודה לא מוכרת. הקלד 'עזרה' לרשימת הפקודות.")
 
 
 if __name__ == "__main__":
-    # שימוש בקובץ האמיתי מתוך ה-parser
-    file_path = r"C:\Users\ashov\Downloads\28-08-26.docx"
-    wordbank = "data/crossword_wordbank_he.txt"
-    
+    arg_parser = argparse.ArgumentParser(description="פותר תשבצים קריפטיים אינטראקטיבי")
+    arg_parser.add_argument("docx_path", help="נתיב לקובץ ה-DOCX של התשבץ")
+    arg_parser.add_argument("--wordbank", default="data/crossword_wordbank_he.txt",
+                            help="נתיב לקובץ מאגר המילים (ברירת מחדל: data/crossword_wordbank_he.txt)")
+    arg_parser.add_argument("--min-length", type=int, default=2,
+                            help="אורך מילה מינימלי (ברירת מחדל: 2)")
+    args = arg_parser.parse_args()
+
     try:
         # 1. טעינה ופענוח הלוח
-        raw_text = extract_text_from_docx(file_path)
+        raw_text = extract_text_from_docx(args.docx_path)
         result_matrix = parse_grid_to_matrix(raw_text)
         parsed_clues = parse_clues(raw_text)
-        
-        my_grid = Grid(result_matrix, min_word_length=2)
+
+        my_grid = Grid(result_matrix, min_word_length=args.min_length)
         link_clues_to_grid(my_grid, parsed_clues)
-        
-        # 2. יצירת הפותרן
-        my_solver = Solver(my_grid, wordbank)
-        
-        print("\n--- סימולציית פתרון אינטראקטיבי ---")
-        # נניח שפתרת את 9 אופקי: "קצין עם קוף (3)" -> סרן (סרן + ן')
-        my_solver.lock_word("9", "ACROSS", "סרן")
-        
-        # עכשיו נבקש מהמערכת עזרה עם 1 מאונך שחותך את המילה שהזנו
-        clue_1_down = my_solver.get_slot_by_clue("1", "DOWN")
-        print(f"\nמבקש הצעות עבור {clue_1_down.clue_number} מאונך: '{clue_1_down.clue_text}'")
-        
-        suggestions = my_solver.suggest_words_for_slot("1", "DOWN", max_results=5)
-        print(f"הצעות המנוע (מתוך המילון, מתחשב באות 'ס' שנחתכת): {suggestions}")
-        
-        # הצגת הלוח החלקי כדי לראות את המילה ששובצה
-        my_solver.plot_solution()
-        
+
+        # 2. יצירת הפותרן והפעלת מצב אינטראקטיבי
+        my_solver = Solver(my_grid, args.wordbank)
+        my_solver.run_interactive()
+
     except Exception as e:
         print(f"שגיאה בהרצה: {e}")
