@@ -121,6 +121,15 @@ def parse_clues(raw_text: str) -> dict:
             length_match = re.search(r'\(([\d\,]+)\)', raw_clue_text)
             lengths = length_match.group(1) if length_match else ""
             
+            if length_match:
+                # מוציאים את תבנית האורך מהמקום שבו נמצאה ומצמידים אותה לסוף ההגדרה,
+                # כדי שמספר האותיות יופיע בסוף ולא בתחילת הטקסט
+                raw_clue_text = (
+                    raw_clue_text[:length_match.start()] + raw_clue_text[length_match.end():]
+                ).strip()
+                raw_clue_text = " ".join(raw_clue_text.split())
+                raw_clue_text = f"{raw_clue_text} ({lengths})"
+            
             direction_dict[clue_id] = {
                 "text": raw_clue_text,
                 "lengths": lengths

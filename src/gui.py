@@ -220,9 +220,13 @@ class CrosswordGUI:
     # ─── Clue Panel ──────────────────────────────────────────────────────
 
     def _clue_display_text(self, slot: Slot) -> str:
-        status = f"✓ {slot.assigned_word}" if slot.assigned_word else f"({slot.length})"
         clue = slot.clue_text if slot.clue_text else ""
-        return f"{slot.clue_number}. {clue}  [{status}]"
+        # Prepend a right-to-left mark (U+200F) so the clue number is
+        # anchored on the right side, matching Hebrew reading order.
+        text = f"\u200f{slot.clue_number}. {clue}"
+        if slot.assigned_word:
+            text += f"  [✓ {slot.assigned_word}]"
+        return text
 
     def _populate_clues(self):
         self.across_listbox.delete(0, tk.END)
