@@ -4,7 +4,7 @@ import matplotlib.patches as patches
 import os
 import random
 from collections import defaultdict
-from typing import List, Dict
+from typing import List, Dict, Tuple
 from grid import Grid, Slot
 from parser import extract_text_from_docx, parse_grid_to_matrix, parse_clues, link_clues_to_grid
 
@@ -16,21 +16,47 @@ class Solver:
         # מילון שבו המפתח הוא אורך המילה, והערך הוא רשימת המילים באורך הזה
         self.words_by_length: Dict[int, List[str]] = defaultdict(list)
         
+        # מילון שבו המפתח הוא תבנית חלוקה למילים *ממוינת* (למשל (4, 6)), והערך
+        # הוא רשימת המילים שאנחנו יודעים בוודאות שמתחלקות למילים באורכים האלה.
+        # המפתח ממוין (ולא לפי הסדר המקורי) כי מקור התבנית במאגר (סדר המילים
+        # בכותרת ויקיפדיה) לא בהכרח תואם לסדר שבו הן מופיעות בהגדרת התשבץ -
+        # למשל "(5,4)" בהגדרה ו-"(4,5)" במאגר מתארים בפועל את אותה חלוקה.
+        # תבנית זו נשמרת במאגר רק עבור ערכים שהגיעו במקור כמה מילים (עם רווח),
+        # כדי שנוכל לסנן הצעות עבור הגדרות מפוצלות כמו "(4,6)" ולא להציע מילה
+        # בודדת שרק סך אותיותיה מתאים, כמו "(7,3)".
+        self.words_by_pattern: Dict[Tuple[int, ...], List[str]] = defaultdict(list)
+        
         self._load_words()
         self._initialize_domains()
 
     def _load_words(self):
         """
-        קורא את קובץ הנתונים וממפה את כל הערכים החוקיים לפי האורך שלהם.
+        קורא את קובץ הנתונים וממפה את כל הערכים החוקיים לפי האורך שלהם,
+        ולפי תבנית החלוקה למילים שלהם כשזו ידועה (עמודה שנייה מופרדת בטאב).
         """
         if not os.path.exists(self.wordbank_path):
             raise FileNotFoundError(f"לא נמצא קובץ נתונים בנתיב: {self.wordbank_path}")
             
         with open(self.wordbank_path, 'r', encoding='utf-8') as f:
             for line in f:
-                word = line.strip()
-                if word:
-                    self.words_by_length[len(word)].append(word)
+                line = line.rstrip('\n')
+                if not line:
+                    continue
+                
+                if '\t' in line:
+                    word, pattern_str = line.split('\t', 1)
+                    word = word.strip()
+                    pattern = tuple(int(p) for p in pattern_str.split(',') if p.strip())
+                else:
+                    word = line.strip()
+                    pattern = ()
+                
+                if not word:
+                    continue
+                
+                self.words_by_length[len(word)].append(word)
+                if len(pattern) > 1:
+                    self.words_by_pattern[tuple(sorted(pattern))].append(word)
         
         # הדפסת בקרה קטנה לראות שהכל נטען
         total_words = sum(len(words) for words in self.words_by_length.values())
@@ -39,11 +65,18 @@ class Solver:
     def _initialize_domains(self):
         """
         מזין לכל Slot בלוח את מרחב האפשרויות ההתחלתי שלו.
+        אם להגדרה יש תבנית חלוקה למילים ידועה (כמו "(4,6)"), מסננים מראש
+        רק למילים שידוע שמתחלקות בדיוק כך - כדי לא להציע התאמות שגויות
+        כמו מילה שסך אותיותיה מתאים אך החלוקה שלה שונה (למשל "(7,3)" במקום "(4,6)").
         """
         for slot in self.grid.slots:
-            # אנחנו שומרים עותק (copy) של הרשימה. 
-            # זה קריטי כדי שנוכל למחוק מילים שנפסלו מ-Slot אחד בלי למחוק אותן מהמאגר הכללי.
-            slot.domain = self.words_by_length.get(slot.length, []).copy()
+            if len(slot.clue_word_lengths) > 1:
+                pattern = tuple(sorted(slot.clue_word_lengths))
+                slot.domain = self.words_by_pattern.get(pattern, []).copy()
+            else:
+                # אנחנו שומרים עותק (copy) של הרשימה. 
+                # זה קריטי כדי שנוכל למחוק מילים שנפסלו מ-Slot אחד בלי למחוק אותן מהמאגר הכללי.
+                slot.domain = self.words_by_length.get(slot.length, []).copy()
 
             # מערבבים את רשימת המילים כדי לקבל תוצאה שונה בכל הרצה
             random.shuffle(slot.domain)

@@ -1,6 +1,6 @@
 import re
 import docx
-from grid import Grid
+from grid import Grid, Slot
 
 def extract_text_from_docx(file_path: str) -> str:
     """
@@ -156,7 +156,36 @@ def link_clues_to_grid(grid: Grid, parsed_clues: dict):
             # שימוש בביטוי רגולרי כדי ש-'23' יתפוס גם את '23' וגם את '23+8 אופקי'
             if re.match(rf"^{slot.clue_number}(?:\+|$|\s)", str(key)):
                 slot.clue_text = data["text"]
+                slot.clue_word_lengths = _extract_word_lengths_for_slot(str(key), data["lengths"], slot)
                 break
+
+
+def _extract_word_lengths_for_slot(key: str, lengths_str: str, slot: Slot) -> list:
+    """
+    ממירה את מחרוזת האורכים (למשל "4,6") לתבנית חלוקה למילים עבור העוגן הנוכחי.
+
+    הבחנה חשובה: "23+8" מציין שההגדרה מתפצלת על פני *שני עוגנים נפרדים* בלוח
+    (כל אחד מקבל מספר אחד מהרשימה בהתאמה), ולא חלוקה למילים בתוך עוגן אחד.
+    לכן במקרה הזה לא מייצרים תבנית - האורך של כל עוגן הוא כבר שלם בפני עצמו.
+    לעומת זאת, "10. הגדרה (4,6)" עבור עוגן בודד באורך 10 מציין תשובה של שתי
+    מילים (4+6) שממוזגות לתוך אותו עוגן, ורק אז יש טעם לשמור תבנית לסינון.
+    """
+    if not lengths_str:
+        return []
+
+    try:
+        parts = [int(p) for p in lengths_str.split(',') if p.strip()]
+    except ValueError:
+        return []
+
+    if '+' in key:
+        # חלוקה בין עוגנים נפרדים - אין תבנית מילים לעוגן בודד
+        return []
+
+    if len(parts) > 1 and sum(parts) == slot.length:
+        return parts
+
+    return []
 
 
 if __name__ == "__main__":
