@@ -5,12 +5,35 @@ from grid import Grid, Slot
 def extract_text_from_docx(file_path: str) -> str:
     """
     קוראת קובץ docx, מזהה משבצות שחורות ותאים ממוזגים בטבלה.
+
+    בחלק מהמסמכים ההגדרות מגיעות כפסקאות רגילות, ובאחרים (למשל כאשר יש
+    טבלה נוספת) הן מגיעות בתוך תאי טבלה. מזהים טבלת הגדרות (מכילה "אנכי:"
+    או "אופקי:") ומוציאים ממנה את הטקסט בנפרד מלוח התשבץ.
     """
     doc = docx.Document(file_path)
-    extracted_lines = []
-    
+    board_lines = []
+    clue_lines = []
+    found_clue_table = False
+
     # 1. חילוץ הלוח (הטבלאות)
     for table in doc.tables:
+        table_text = " ".join(cell.text for row in table.rows for cell in row.cells)
+        is_clue_table = ("אנכי:" in table_text) or ("אופקי:" in table_text)
+
+        if is_clue_table:
+            found_clue_table = True
+            seen_cells = set()
+            for row in table.rows:
+                for cell in row.cells:
+                    if cell in seen_cells:
+                        continue
+                    seen_cells.add(cell)
+                    for line in cell.text.split('\n'):
+                        line = line.strip()
+                        if line:
+                            clue_lines.append(line)
+            continue
+
         for row in table.rows:
             row_data = []
             seen_cells = set() # למניעת כפילויות במקרה של תאים ממוזגים
@@ -44,17 +67,19 @@ def extract_text_from_docx(file_path: str) -> str:
                     row_data.append(clean_cell if clean_cell else " ")
                     
             # סוגרים כל שורה עם מפריד בסוף כדי שנדע מתי היא נחתכת
-            extracted_lines.append("|".join(row_data) + "|")
+            board_lines.append("|".join(row_data) + "|")
             
     # נוסיף סימן ברור שמפריד בין הלוח לחלק של ההגדרות הטקסטואליות
-    extracted_lines.append("---BOARD_END---")
+    board_lines.append("---BOARD_END---")
     
-    # 2. חילוץ ההגדרות (הפסקאות)
-    for para in doc.paragraphs:
-        if para.text.strip():
-            extracted_lines.append(para.text.strip())
+    # 2. חילוץ ההגדרות (הפסקאות) - רלוונטי רק אם לא נמצאה טבלת הגדרות נפרדת,
+    # שכן אחרת פסקאות אלו הן בדרך כלל רק כותרת/קרדיט של הגיליון.
+    if not found_clue_table:
+        for para in doc.paragraphs:
+            if para.text.strip():
+                clue_lines.append(para.text.strip())
             
-    return '\n'.join(extracted_lines)
+    return '\n'.join(board_lines + clue_lines)
 
 
 def parse_grid_to_matrix(raw_text: str, cols: int = 11) -> list:
@@ -91,12 +116,26 @@ def parse_clues(raw_text: str) -> dict:
     מתמודדת עם הגדרות מפוצלות (כמו "23+8 אופקי") וקרדיטים.
     """
     clues_section = raw_text.split("---BOARD_END---")[1]
-    
-    if "אנכי:" in clues_section:
-        across_part, down_part = clues_section.split("אנכי:")
-        across_part = across_part.replace("אופקי:", "")
+
+    # "אופקי:" ו-"אנכי:" יכולים להגיע בכל סדר, לפי מבנה המסמך.
+    across_idx = clues_section.find("אופקי:")
+    down_idx = clues_section.find("אנכי:")
+
+    if across_idx != -1 and down_idx != -1:
+        if across_idx < down_idx:
+            across_part = clues_section[across_idx + len("אופקי:"):down_idx]
+            down_part = clues_section[down_idx + len("אנכי:"):]
+        else:
+            down_part = clues_section[down_idx + len("אנכי:"):across_idx]
+            across_part = clues_section[across_idx + len("אופקי:"):]
+    elif across_idx != -1:
+        across_part = clues_section[across_idx + len("אופקי:"):]
+        down_part = ""
+    elif down_idx != -1:
+        down_part = clues_section[down_idx + len("אנכי:"):]
+        across_part = ""
     else:
-        across_part = clues_section.replace("אופקי:", "")
+        across_part = clues_section
         down_part = ""
 
     parsed_clues = {"ACROSS": {}, "DOWN": {}}
