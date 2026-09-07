@@ -1,5 +1,5 @@
 """
-מריץ את כל סקריפטי המקורות (ויקיפדיה, ויקימילון, Hspell, וויקיפדיה הארמית) וממזג את התוצאות
+מריץ את כל סקריפטי המקורות (ויקיפדיה, ויקימילון, Hspell, ומילים ארמיות מויקימילון) וממזג את התוצאות
 שלהם למאגר מילים אחד: data/crossword_wordbank_he.txt.
 
 כל מקור נשמר גם בנפרד תחת data/sources/, כך שאפשר להריץ מקור בודד
@@ -23,7 +23,7 @@ SOURCE_FILES = [
     "wikipedia_he.txt",
     "wiktionary_he.txt",
     "hspell_he.txt",
-    "wikipedia_arc.txt",
+    "wiktionary_aramaic.txt",
 ]
 
 
@@ -49,7 +49,7 @@ def build_all_sources():
     build_wiktionary()
     print("\n=== מקור 3/4: Hspell ===")
     build_hspell()
-    print("\n=== מקור 4/4: ויקיפדיה הארמית ===")
+    print("\n=== מקור 4/4: ויקימילון (ארמית) ===")
     build_arcwiki()
 
 
