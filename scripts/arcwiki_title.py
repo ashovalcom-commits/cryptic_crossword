@@ -76,7 +76,7 @@ def build_crossword_bank():
 if __name__ == "__main__":
     build_crossword_bank()
 
-
+# old version using aramehicwikipedia dump, which is currently not available
 # import os
 # import sys
 # import gzip

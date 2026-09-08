@@ -5,7 +5,6 @@
 כל מקור נשמר גם בנפרד תחת data/sources/, כך שאפשר להריץ מקור בודד
 (למשל scripts/wikipedia_title.py) בלי לגעת במאגר הכולל.
 """
-
 import os
 import sys
 

@@ -2,6 +2,7 @@
 
 # Core utilities
 requests>=2.31.0
+python-dotenv>=1.0.0
 
 # Data processing / NLP
 pandas>=2.2.0

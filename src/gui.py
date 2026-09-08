@@ -3,10 +3,23 @@ import os
 import sys
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
+from dotenv import load_dotenv
+from engine.semantic_api import ClaudeSemanticAPI
+
+load_dotenv()
 
 from grid import Grid, Slot, Direction
 from parser import extract_text_from_docx, parse_grid_to_matrix, parse_clues, link_clues_to_grid
 from solver import Solver
+from engine.orchestrator import CrypticEngine
+from engine.splitters import ParsedClue
+from engine.sub_solvers.anagram_solver import AnagramSolver
+
+
+# class MockSemanticAPI:
+#     def get_synonyms(self, term: str, length_limit: int):
+#         # הזרקת תשובות זבל לצד תשובה אחת אמיתית כדי לוודא שהפילטר עובד
+#         return ["מילהא", "מילהב", "רצה", "עודמילה"]
 
 
 # ─── Constants ───────────────────────────────────────────────────────────────
@@ -26,6 +39,21 @@ class CrosswordGUI:
         self.solver = solver
         self.grid = solver.grid
         self.selected_slot: Slot | None = None
+        
+        # אתחול מנוע ההיגיון
+        solvers_list = [AnagramSolver()]
+
+        # שימוש במחלקת ה-API האמיתית במקום ב-Mock
+        # המפתח נטען ממשתנה הסביבה ANTHROPIC_API_KEY (ראו קובץ .env / README)
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            messagebox.showwarning(
+                "מפתח API חסר",
+                "לא נמצא משתנה סביבה ANTHROPIC_API_KEY.\n"
+                "פיצוח היגיון לא יעבוד עד שתגדירו אותו."
+            )
+        semantic_api = ClaudeSemanticAPI(api_key=api_key)
+        self.cryptic_engine = CrypticEngine(solvers=solvers_list, semantic_api=semantic_api)
 
         self.root.title("פותר תשבצים קריפטיים")
         self.root.configure(bg="#f0f0f0")
@@ -113,6 +141,7 @@ class CrosswordGUI:
 
         ttk.Button(btn_row, text="פתור הגדרה", command=self._solve_selected).pack(side=tk.RIGHT, padx=4)
         ttk.Button(btn_row, text="הצע מילים", command=self._suggest_words).pack(side=tk.RIGHT, padx=4)
+        ttk.Button(btn_row, text="פיצוח היגיון", command=self._suggest_cryptic).pack(side=tk.RIGHT, padx=4)
 
         # Selected clue display
         self.selected_label = ttk.Label(
@@ -421,6 +450,37 @@ class CrosswordGUI:
         else:
             self.suggestions_listbox.insert(tk.END, "(אין מילים מתאימות)")
             self.status_var.set("לא נמצאו מילים מתאימות")
+
+    def _suggest_cryptic(self):
+        if not self.selected_slot:
+            messagebox.showwarning("שגיאה", "בחר הגדרה קודם.")
+            return
+
+        slot = self.selected_slot
+        
+        # וידוא שיש טקסט להגדרה
+        if not slot.clue_text:
+            messagebox.showinfo("חסר מידע", "להגדרה זו אין טקסט משויך שניתן לנתח.")
+            return
+
+        self.status_var.set("מנתח הגדרת היגיון...")
+        self.root.update_idletasks() # רענון ה-GUI כדי להראות את סטטוס הטעינה
+        
+        # בניית אובייקט ההגדרה למנוע החדש
+        parsed_clue = ParsedClue(original_text=slot.clue_text, length=slot.length)
+        
+        # הפעלת מנוע ההצלבות
+        suggestions = self.cryptic_engine.solve(parsed_clue)
+
+        # עדכון תיבת ההצעות ב-GUI
+        self.suggestions_listbox.delete(0, tk.END)
+        if suggestions:
+            for word in suggestions:
+                self.suggestions_listbox.insert(tk.END, word)
+            self.status_var.set(f"פיצוח היגיון: נמצאו {len(suggestions)} אפשרויות")
+        else:
+            self.suggestions_listbox.insert(tk.END, "(לא נמצאו פיצוחים מתאימים)")
+            self.status_var.set("לא נמצא פיצוח לוגי")
 
 
 # ─── Main ────────────────────────────────────────────────────────────────────
