@@ -1,0 +1,49 @@
+--- Anagram Algorithm Explained ---
+
+Example:
+Clue: "הר שי אחר זמר"
+Target length (target_length): 4
+
+Algorithm Steps:
+1. Initialize `possible_solutions = []`.
+
+2. Take the clue as input: "הר שי אחר זמר", target_length = 4.
+
+3. Remove indicator words (if they exist in the clue). 
+   In this case, assume the word "אחר" is an indicator word.
+   Remaining text: "הר שי זמר".
+
+4. Replace final Hebrew letters (ם, ן, ף, ץ, ך) with their regular forms (מ, נ, פ, צ, כ).
+   Remaining text: "הר שי זמר".
+
+5. Partitioning and Validation:
+   Go over all possible partitions of the remaining text into two parts (Part A and Part B). 
+   Remove spaces within each part.
+   For EVERY partition, check both possible role assignments (which part is the fodder and which is the definition).
+   Rule out any role assignment where `length(anagram_fodder) != target_length`.
+
+   For example, for the partition ["הרשי", "זמר"]:
+
+   Role Option 1: `anagram_fodder` = "זמר", `definition_part` = "הרשי"
+   Check length: length of "זמר" is 3. 3 != 4 -> Option is ruled out.
+
+   Role Option 2: `anagram_fodder` = "הרשי", `definition_part` = "זמר"
+   Check length: length of "הרשי" is 4. 4 == 4 -> Option is valid! Continue to SemanticAPI with this setup.
+
+6. Semantic Validation (for valid options only):
+   - In SemanticAPI, ask for N (N=50 by default) related words to the `definition_part` ("זמר").
+   - Put results in a list called `semantic_words`.
+   - Apply the final-letters replacement rule (ם->מ, etc.) on all words in `semantic_words`.
+   - Create a list of all possible unique anagrams of the `anagram_fodder` ("הרשי") -> put in a list called `anagram_permutations`.
+   - Find intersections/matches between `semantic_words` and `anagram_permutations`.
+   - Add any match (e.g., "שירה") to `possible_solutions`.
+
+7. Return `possible_solutions`.
+
+--- Comments / Additional Context ---
+To help you implement this, here is the list of anagram indicator words the algorithm uses to identify anagrams:
+[
+            "מעורבב", "מעורבבים", "התבלבל", "התבלבלה", 
+            "אחרת", "סדר חדש", "מבולבל", "בשינוי", 
+            "הפוך", "לסדר", "שוב", "אחר", "שונה", 
+        ]

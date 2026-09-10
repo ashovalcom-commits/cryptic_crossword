@@ -1,0 +1,30 @@
+=== Semantic + Anagram debug ===
+clue: הר שי אחר זמר
+target_length: 4
+
+generated splits: 6
+------------------------------------------------------------
+Split #1: definition='הר' | wordplay='שי אחר זמר'
+semantic candidates for definition: []
+No candidates returned by semantic API for this definition.
+------------------------------------------------------------
+Split #2: definition='שי אחר זמר' | wordplay='הר'
+semantic candidates for definition: []
+No candidates returned by semantic API for this definition.
+------------------------------------------------------------
+Split #3: definition='הר שי' | wordplay='אחר זמר'
+semantic candidates for definition: []
+No candidates returned by semantic API for this definition.
+------------------------------------------------------------
+Split #4: definition='אחר זמר' | wordplay='הר שי'
+semantic candidates for definition: []
+No candidates returned by semantic API for this definition.
+------------------------------------------------------------
+Split #5: definition='הר שי אחר' | wordplay='זמר'
+semantic candidates for definition: ['הרשי']
+  candidate='הרשי', len=4, wordplay_part='זמר', solver_result=False
+------------------------------------------------------------
+Split #6: definition='זמר' | wordplay='הר שי אחר'
+semantic candidates for definition: ['שירה']
+  candidate='שירה', len=4, wordplay_part='הר שי אחר', solver_result=True
+  ACCEPTED candidate: שירה

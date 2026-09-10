@@ -12,8 +12,7 @@ class AnagramSolver(BaseWordplaySolver):
             "הפוך", "לסדר", "שוב", "אחר", "שונה", 
         ]
         
-        # בניית ביטוי רגולרי לחיפוש והסרת אינדיקטורים שלמים (כדי לא לחתוך חלקי מילים)
-        # לדוגמה: '\b(מעורבב|אחרת|התבלבל)\b'
+        # בניית ביטוי רגולרי לחיפוש והסרת אינדיקטורים שלמים
         indicators_pattern = r'\b(' + '|'.join(self.indicators) + r')\b'
         self.indicators_regex = re.compile(indicators_pattern)
         
@@ -21,32 +20,33 @@ class AnagramSolver(BaseWordplaySolver):
         self.final_letters_map = str.maketrans("םןףץך", "מנפצכ")
 
     def is_valid_match(self, candidate: str, wordplay_text: str, target_length: int) -> bool:
-        # 1. פסילה מהירה (Early exit): אם אורך המועמד שגוי
-        if len(candidate) != target_length:
+        """
+        wordplay_text הוא ה-fodder של האנגרמה. מסירים ממנו מילות הוראה, מנרמלים
+        אותיות סופיות ומאחדים לרצף אותיות רציף. המועמד תקף רק אם יש לו בדיוק
+        את אותו אורך ואת אותה קבוצת אותיות (אנגרמה) כמו ה-fodder.
+        """
+        if not candidate:
             return False
-            
-        # 2. ניקוי מילות ההוראה (אינדיקטורים) מהטקסט של משחק המילים
-        clean_wordplay = self._remove_indicators(wordplay_text)
-        
-        # הסרת רווחים (כיוון שאנגרמה מתייחסת לרצף האותיות הכללי)
-        clean_wordplay = clean_wordplay.replace(" ", "")
-        
-        # 3. פסילה מהירה נוספת: אם אחרי הניקוי מספר האותיות לא תואם לאורך המבוקש
-        if len(clean_wordplay) != target_length:
+
+        fodder = self._build_fodder(wordplay_text)
+        if len(fodder) != target_length:
             return False
-            
-        # 4. נרמול אותיות סופיות עבור המועמד ועבור אותיות משחק המילים
-        candidate_normalized = self._normalize_hebrew(candidate)
-        wordplay_normalized = self._normalize_hebrew(clean_wordplay)
-        
-        # 5. בדיקה מתמטית: האם תדירות האותיות זהה לחלוטין
-        return Counter(candidate_normalized) == Counter(wordplay_normalized)
-        
+
+        candidate_letters = self._normalize_hebrew("".join(candidate.split()))
+        if len(candidate_letters) != target_length:
+            return False
+
+        return Counter(fodder) == Counter(candidate_letters)
+
+    def _build_fodder(self, wordplay_text: str) -> str:
+        """מסיר מילות הוראה, מנרמל אותיות סופיות ומאחד למחרוזת אותיות רציפה"""
+        clean_text = self._remove_indicators(wordplay_text)
+        normalized = self._normalize_hebrew(clean_text)
+        return "".join(normalized.split())
+
     def _remove_indicators(self, text: str) -> str:
         """מסיר את מילות ההוראה ממשפט משחק המילים"""
-        # מחליף את האינדיקטורים במחרוזת ריקה
         clean_text = self.indicators_regex.sub('', text)
-        # מנקה רווחים כפולים שנוצרו
         return " ".join(clean_text.split())
         
     def _normalize_hebrew(self, text: str) -> str:
